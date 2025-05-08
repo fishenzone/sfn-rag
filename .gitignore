@@ -1,0 +1,9 @@
+qdrant_data/
+__pycache__/
+*.pyc
+dist/
+build/
+.env
+*.log
+.vscode/
+.idea/

@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>СФН AI Чат-бот</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            margin: 0;
+            padding: 0;
+            background-color: #f4f7f9;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            color: #333;
+        }
+        .app-container {
+            width: 100%;
+            max-width: 700px;
+            margin: 20px;
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 30, 80, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .header {
+            text-align: center;
+            padding: 25px 20px;
+            border-bottom: 1px solid #e0e0e0;
+            background-color: #004A99;
+            color: white;
+        }
+        .header h1 {
+            margin: 0 0 5px 0;
+            font-size: 1.8em;
+            font-weight: 600;
+        }
+        .header p {
+            margin: 0;
+            font-size: 0.95em;
+            color: #e0e6eb;
+        }
+        .chat-container {
+            padding: 20px;
+            height: 500px;
+            overflow-y: auto;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .message {
+            padding: 12px 18px;
+            border-radius: 18px;
+            max-width: 75%;
+            word-break: break-word;
+            line-height: 1.5;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .user-message {
+            background-color: #007bff;
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 5px;
+        }
+        .bot-message {
+            background-color: #e9ecef;
+            color: #212529;
+            margin-right: auto;
+            border-bottom-left-radius: 5px;
+        }
+        .timestamp {
+            font-size: 0.7em;
+            color: #adb5bd;
+            margin-top: 8px;
+            display: block;
+        }
+        .user-message .timestamp {
+            color: #cce5ff;
+        }
+        .sources-container {
+            margin-top: 10px;
+            font-size: 0.8em;
+            color: #555;
+            border-top: 1px solid #d5dde2;
+            padding-top: 8px;
+        }
+        .sources-container strong {
+            color: #333;
+        }
+        .sources-container ul {
+            padding-left: 20px;
+            margin: 5px 0 0 0;
+        }
+        .sources-container li {
+            margin-bottom: 4px;
+        }
+        .input-container {
+            display: flex;
+            gap: 10px;
+            padding: 15px 20px;
+            border-top: 1px solid #e0e0e0;
+            background-color: #f8f9fa;
+        }
+        #user-input {
+            flex-grow: 1;
+            padding: 12px 15px;
+            border: 1px solid #ced4da;
+            border-radius: 20px;
+            font-size: 1em;
+            outline: none;
+        }
+        #user-input:focus {
+            border-color: #007bff;
+            box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+        }
+        button#send-button {
+            padding: 12px 25px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 500;
+            transition: background-color 0.2s ease-in-out;
+        }
+        button#send-button:hover {
+            background-color: #0056b3;
+        }
+        .loading {
+            text-align: center;
+            padding: 15px;
+            color: #6c757d;
+            font-style: italic;
+        }
+
+        .chat-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        .chat-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        .chat-container::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 10px;
+        }
+        .chat-container::-webkit-scrollbar-thumb:hover {
+            background: #aaa;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="header">
+            <h1>СФН AI Чат-бот</h1>
+            <p>Задайте вопрос о продуктах и услугах ООО «СФН»</p>
+        </div>
+        
+        <div class="chat-container" id="chat-container">
+        </div>
+        
+        <div class="loading" id="loading" style="display: none;">
+            <p>Обрабатываем ваш запрос...</p>
+        </div>
+        
+        <div class="input-container">
+            <input type="text" id="user-input" placeholder="Введите ваш вопрос...">
+            <button id="send-button">Отправить</button>
+        </div>
+    </div>
+
+    <script>
+        let sessionId = null;
+        const chatContainer = document.getElementById('chat-container');
+        const userInput = document.getElementById('user-input');
+        const sendButton = document.getElementById('send-button');
+        const loadingIndicator = document.getElementById('loading');
+
+        async function createSession() {
+            try {
+                const response = await fetch('/api/sessions', {
+                    method: 'POST',
+                });
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const data = await response.json();
+                sessionId = data.session_id;
+                console.log('New session created:', sessionId);
+                
+                addMessageToChat("Здравствуйте! Я чат-бот ООО «СФН». Чем могу помочь вам сегодня?", false, [], new Date().toISOString(), true);
+                
+            } catch (error) {
+                console.error('Error creating session:', error);
+                addMessageToChat("Извините, возникла проблема с подключением. Пожалуйста, обновите страницу.", false, [], new Date().toISOString(), true);
+            }
+        }
+
+        function getCurrentTimestamp() {
+            return new Date().toISOString();
+        }
+
+        function formatTimestamp(isoString) {
+            if (!isoString) return '';
+            const date = new Date(isoString);
+            return date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        }
+
+        function addMessageToChat(message, isUser, sources = [], timestamp = getCurrentTimestamp(), isInitial = false) {
+            const messageWrapper = document.createElement('div');
+            messageWrapper.style.display = 'flex';
+            messageWrapper.style.justifyContent = isUser ? 'flex-end' : 'flex-start';
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message');
+            messageDiv.classList.add(isUser ? 'user-message' : 'bot-message');
+            
+            const messageContent = document.createElement('div');
+            messageContent.textContent = message;
+            messageDiv.appendChild(messageContent);
+            
+            const timestampDiv = document.createElement('div');
+            timestampDiv.classList.add('timestamp');
+            timestampDiv.textContent = formatTimestamp(timestamp);
+            messageDiv.appendChild(timestampDiv);
+            
+            if (!isUser && sources && sources.length > 0) {
+                const sourcesDiv = document.createElement('div');
+                sourcesDiv.classList.add('sources-container');
+                sourcesDiv.innerHTML = '<strong>Источники:</strong>';
+                
+                const sourcesList = document.createElement('ul');
+                sources.forEach(source => {
+                    const sourceItem = document.createElement('li');
+                    sourceItem.textContent = source.text;
+                    sourcesList.appendChild(sourceItem);
+                });
+                
+                sourcesDiv.appendChild(sourcesList);
+                messageDiv.appendChild(sourcesDiv);
+            }
+            
+            messageWrapper.appendChild(messageDiv);
+            chatContainer.appendChild(messageWrapper);
+
+            if (isInitial) {
+                setTimeout(() => { chatContainer.scrollTop = chatContainer.scrollHeight; }, 50);
+            } else {
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+        }
+
+        async function sendMessage() {
+            const message = userInput.value.trim();
+            if (!message || !sessionId) return;
+            
+            const userMessageTimestamp = getCurrentTimestamp();
+            addMessageToChat(message, true, [], userMessageTimestamp);
+            userInput.value = '';
+            loadingIndicator.style.display = 'block';
+            sendButton.disabled = true;
+            userInput.disabled = true;
+            
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        query: message,
+                        session_id: sessionId
+                    }),
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ detail: "Unknown error occurred." }));
+                    throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.session_id) {
+                    sessionId = data.session_id;
+                }
+                
+                addMessageToChat(data.response, false, data.sources, getCurrentTimestamp());
+
+            } catch (error) {
+                console.error('Error sending message:', error);
+                addMessageToChat(`Извините, произошла ошибка: ${error.message}`, false, [], getCurrentTimestamp());
+            } finally {
+                loadingIndicator.style.display = 'none';
+                sendButton.disabled = false;
+                userInput.disabled = false;
+                userInput.focus();
+            }
+        }
+
+        sendButton.addEventListener('click', sendMessage);
+        userInput.addEventListener('keypress', function(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        createSession();
+    </script>
+</body>
+</html>

@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>История Чатов - СФН AI</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f7f9;
+            color: #333;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 30, 80, 0.1);
+        }
+        h1, h2 {
+            color: #004A99;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 10px;
+        }
+        .session-list {
+            list-style-type: none;
+            padding: 0;
+        }
+        .session-list li {
+            background-color: #f8f9fa;
+            border: 1px solid #e9ecef;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        .session-list li:hover {
+            background-color: #e9ecef;
+        }
+        .session-list li strong {
+            font-size: 1.1em;
+            color: #0056b3;
+        }
+        .session-list li p {
+            font-size: 0.9em;
+            color: #555;
+            margin: 5px 0 0 0;
+        }
+        .chat-history-display {
+            margin-top: 30px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            background-color: #fdfdfd;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .message {
+            padding: 10px 15px;
+            border-radius: 15px;
+            margin-bottom: 12px;
+            max-width: 80%;
+            word-break: break-word;
+            line-height: 1.4;
+        }
+        .user-message {
+            background-color: #007bff;
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 5px;
+        }
+        .bot-message {
+            background-color: #e9ecef;
+            color: #212529;
+            margin-right: auto;
+            border-bottom-left-radius: 5px;
+        }
+        .timestamp {
+            font-size: 0.75em;
+            color: #adb5bd;
+            margin-top: 5px;
+            display: block;
+        }
+        .user-message .timestamp {
+            color: #cce5ff;
+        }
+        .loading, .no-selection {
+            text-align: center;
+            color: #6c757d;
+            padding: 20px;
+            font-style: italic;
+        }
+        a.back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #007bff;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        a.back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-link">&larr; Вернуться к чату</a>
+        <h1>История Чатов</h1>
+        <div id="session-list-container">
+            <h2>Доступные сессии</h2>
+            <ul class="session-list" id="sessions">
+            </ul>
+            <div id="sessions-loading" class="loading" style="display: none;">Загрузка списка сессий...</div>
+        </div>
+
+        <div id="chat-history-container" style="display: none;">
+            <h2 id="current-session-id-title">История сессии: </h2>
+            <div class="chat-history-display" id="chat-history-messages">
+            </div>
+            <div id="history-loading" class="loading" style="display: none;">Загрузка истории...</div>
+        </div>
+        <div id="no-selection" class="no-selection" style="display: block;">Выберите сессию из списка для просмотра истории.</div>
+    </div>
+
+    <script>
+        const sessionsList = document.getElementById('sessions');
+        const sessionsLoading = document.getElementById('sessions-loading');
+        
+        const chatHistoryContainer = document.getElementById('chat-history-container');
+        const currentSessionIdTitle = document.getElementById('current-session-id-title');
+        const chatHistoryMessages = document.getElementById('chat-history-messages');
+        const historyLoading = document.getElementById('history-loading');
+        const noSelectionMessage = document.getElementById('no-selection');
+
+        function formatTimestamp(isoString) {
+            if (!isoString || isoString === "N/A") return '';
+            const date = new Date(isoString);
+            return date.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+        }
+
+        async function loadSessionList() {
+            sessionsLoading.style.display = 'block';
+            sessionsList.innerHTML = '';
+            try {
+                const response = await fetch('/api/sessions/list');
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const data = await response.json();
+
+                if (data.sessions && data.sessions.length > 0) {
+                    data.sessions.forEach(session => {
+                        const listItem = document.createElement('li');
+                        listItem.setAttribute('data-session-id', session.session_id);
+                        
+                        let title = session.title || 'Без названия';
+                        if (title.startsWith("N/A")) title = "Начало сессии";
+
+                        listItem.innerHTML = `
+                            <strong>ID: ${session.session_id.substring(0,8)}...</strong>
+                            <p>Тема: ${title}</p>
+                            <p>Сообщений: ${session.message_count}</p>
+                            <p>Начало: ${formatTimestamp(session.first_message_timestamp)}</p>
+                            <p>Конец: ${formatTimestamp(session.last_message_timestamp)}</p>
+                        `;
+                        listItem.addEventListener('click', () => loadChatHistory(session.session_id));
+                        sessionsList.appendChild(listItem);
+                    });
+                } else {
+                    sessionsList.innerHTML = '<li>Нет доступных сессий.</li>';
+                }
+            } catch (error) {
+                console.error('Error loading session list:', error);
+                sessionsList.innerHTML = '<li>Ошибка загрузки списка сессий.</li>';
+            } finally {
+                sessionsLoading.style.display = 'none';
+            }
+        }
+
+        async function loadChatHistory(sessionId) {
+            historyLoading.style.display = 'block';
+            chatHistoryMessages.innerHTML = '';
+            noSelectionMessage.style.display = 'none';
+            chatHistoryContainer.style.display = 'block';
+            currentSessionIdTitle.textContent = `История сессии: ${sessionId}`;
+
+            try {
+                const response = await fetch(`/api/sessions/${sessionId}/history`);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const data = await response.json();
+
+                if (data.history && data.history.length > 0) {
+                    data.history.forEach(message => {
+                        addMessageToDisplay(message.content, message.role === 'user', message.timestamp);
+                    });
+                } else {
+                    chatHistoryMessages.innerHTML = '<p>История этой сессии пуста.</p>';
+                }
+            } catch (error) {
+                console.error(`Error loading history for session ${sessionId}:`, error);
+                chatHistoryMessages.innerHTML = `<p>Ошибка загрузки истории для сессии ${sessionId}.</p>`;
+            } finally {
+                historyLoading.style.display = 'none';
+                chatHistoryMessages.scrollTop = chatHistoryMessages.scrollHeight;
+            }
+        }
+
+        function addMessageToDisplay(message, isUser, isoTimestamp) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message');
+            messageDiv.classList.add(isUser ? 'user-message' : 'bot-message');
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.textContent = message;
+            messageDiv.appendChild(contentDiv);
+
+            const timestampDiv = document.createElement('div');
+            timestampDiv.classList.add('timestamp');
+            timestampDiv.textContent = formatTimestamp(isoTimestamp);
+            messageDiv.appendChild(timestampDiv);
+            
+            chatHistoryMessages.appendChild(messageDiv);
+        }
+
+        loadSessionList();
+    </script>
+</body>
+</html>
